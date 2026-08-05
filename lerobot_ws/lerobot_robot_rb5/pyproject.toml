@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=71.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lerobot_robot_rb5"
+version = "0.1.0"
+description = "LeRobot Robot plugin for the Rainbow Robotics RB5-850E, backed by a ZMQ bridge to ROS2/MoveIt (real hardware or Isaac Sim)."
+requires-python = ">=3.12"
+dependencies = [
+    "lerobot",
+    "pyzmq>=26.0.0,<28.0.0",
+    "numpy>=2.0.0,<2.3.0",
+]
+
+# Distribution name must start with "lerobot_robot_" -- lerobot's
+# register_third_party_plugins() discovers and imports it by that prefix so
+# `--robot.type=rb5_850e` resolves without editing lerobot's own source.
+[tool.setuptools.packages.find]
+where = ["src"]

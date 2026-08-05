@@ -1,0 +1,85 @@
+# For the Place stage (place_env_cfg.py). Gripper release is scripted there
+# (mdp.AutoReleaseActionTermCfg, 0 policy dims), not learned -- the policy
+# only controls the 6-dim arm action, mirroring skrl_ppo_cfg_reach_grasp.yaml's
+# rationale for the scripted-grasp ReachGrasp stage. Same hyperparameters as
+# that config (validated on this robot/action-space shape already), just a
+# new experiment name and a more conservative timestep budget since this
+# stage's reward shaping hasn't been trained/tuned yet.
+seed: 42
+
+models:
+  separate: False
+  policy:
+    class: GaussianMixin
+    clip_actions: False
+    clip_log_std: True
+    min_log_std: -20.0
+    max_log_std: 2.0
+    initial_log_std: 0.0
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [256, 128, 64]
+        activations: elu
+    output: ACTIONS
+  value:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [256, 128, 64]
+        activations: elu
+    output: ONE
+
+memory:
+  class: RandomMemory
+  memory_size: -1  # auto (== agent.rollouts)
+
+agent:
+  class: PPO
+  rollouts: 24
+  learning_epochs: 8
+  # num_envs=8192 here (see place_env_cfg.py's __post_init__), same 4x scale
+  # as ReachGrasp/GraspLift -> mini_batches scaled 4x to match.
+  mini_batches: 16
+  discount_factor: 0.99
+  lambda: 0.95
+  # Fixed, no scheduler -- see skrl_ppo_cfg_reach_grasp.yaml's module-level
+  # comment for why (KLAdaptiveLR death-spiral root cause).
+  learning_rate: 1.0e-04
+  learning_rate_scheduler: null
+  learning_rate_scheduler_kwargs: null
+  state_preprocessor: RunningStandardScaler
+  state_preprocessor_kwargs: null
+  value_preprocessor: RunningStandardScaler
+  value_preprocessor_kwargs: null
+  random_timesteps: 0
+  learning_starts: 0
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  clip_predicted_values: True
+  entropy_loss_scale: 0.002
+  value_loss_scale: 2.0
+  # 0.0 (disabled) -- known-good baseline value (see
+  # skrl_ppo_cfg_reach_grasp.yaml's identical comment for why a nonzero
+  # value caused stalled learning there).
+  kl_threshold: 0.0
+  rewards_shaper_scale: 0.01
+  time_limit_bootstrap: False
+  experiment:
+    directory: "rb5_pick_place"
+    experiment_name: "PPO(Place)"
+    write_interval: auto
+    checkpoint_interval: auto
+
+trainer:
+  class: SequentialTrainer
+  # 100000, not ReachGrasp's validated 150000 -- this stage's reward shaping
+  # (object_to_goal_position_reward reused with a neutered height gate,
+  # released_and_stable_reward as the ground-truth signal) is untested,
+  # so start at the same conservative budget the ReachGrasp ablation series
+  # used before scaling up once validated.
+  timesteps: 100000
+  environment_info: log

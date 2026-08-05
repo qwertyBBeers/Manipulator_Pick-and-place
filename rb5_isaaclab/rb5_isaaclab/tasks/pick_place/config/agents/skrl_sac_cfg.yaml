@@ -1,0 +1,97 @@
+# SAC -- small-scale comparison config (see rb5_isaaclab/README.md for why
+# this is small-scale-only, and why no IsaacLab example task ships a SAC
+# yaml to crib from). Written directly from skrl 2.0's SAC_CFG dataclass
+# (skrl/agents/torch/sac/sac_cfg.py) and its Runner._generate_models role
+# requirements (skrl/agents/torch/sac/sac.py: policy/critic_1/critic_2/
+# target_critic_1/target_critic_2), not copied from any IsaacLab template
+# -- verify against a live smoke run before trusting these hyperparameters
+# for a real training run.
+#
+# Meant to be used with the RB5-PickPlace-JointPos-SAC-v0 task id
+# (num_envs=64) via:
+#   ./isaaclab.sh -p scripts/reinforcement_learning/skrl/train.py \
+#     --task RB5-PickPlace-JointPos-SAC-v0 --agent skrl_sac_cfg_entry_point
+seed: 42
+
+models:
+  separate: True
+  policy:
+    class: GaussianMixin
+    clip_actions: True
+    clip_log_std: True
+    min_log_std: -20.0
+    max_log_std: 2.0
+    initial_log_std: 0.0
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [256, 128, 64]
+        activations: elu
+    output: ACTIONS
+  critic_1:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: concatenate([OBSERVATIONS, ACTIONS])
+        layers: [256, 128, 64]
+        activations: elu
+    output: ONE
+  critic_2:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: concatenate([OBSERVATIONS, ACTIONS])
+        layers: [256, 128, 64]
+        activations: elu
+    output: ONE
+  target_critic_1:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: concatenate([OBSERVATIONS, ACTIONS])
+        layers: [256, 128, 64]
+        activations: elu
+    output: ONE
+  target_critic_2:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: concatenate([OBSERVATIONS, ACTIONS])
+        layers: [256, 128, 64]
+        activations: elu
+    output: ONE
+
+memory:
+  class: RandomMemory
+  memory_size: 100000
+
+agent:
+  class: SAC
+  gradient_steps: 1
+  batch_size: 256
+  discount_factor: 0.99
+  polyak: 0.005
+  learning_rate: 3.0e-04
+  state_preprocessor: RunningStandardScaler
+  state_preprocessor_kwargs: null
+  random_timesteps: 2000
+  learning_starts: 2000
+  grad_norm_clip: 0
+  learn_entropy: True
+  initial_entropy_value: 0.2
+  # target_entropy left null -> skrl defaults it to -action_dim
+  rewards_shaper_scale: 1.0
+  experiment:
+    directory: "rb5_pick_place"
+    experiment_name: ""
+    write_interval: auto
+    checkpoint_interval: auto
+
+trainer:
+  class: SequentialTrainer
+  timesteps: 48000
+  environment_info: log

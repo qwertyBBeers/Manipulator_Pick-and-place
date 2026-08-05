@@ -1,0 +1,54 @@
+1. watch position
+- Translation: [0.331, -0.069, 0.766]
+- Rotation: in Quaternion (xyzw) [0.475, 0.449, 0.507, 0.562]
+- Rotation: in RPY (radian) [1.425, 0.024, 1.488]
+- Rotation: in RPY (degree) [81.648, 1.386, 85.256]
+- Matrix:
+  0.083 -0.143  0.986  0.331
+  0.996  0.036 -0.078 -0.069
+ -0.024  0.989  0.145  0.766
+  0.000  0.000  0.000  1.000
+
+2. gripping position
+At time 140.366673987
+- Translation: [0.301, -0.055, 0.194]
+- Rotation: in Quaternion (xyzw) [0.532, 0.528, 0.458, 0.478]
+- Rotation: in RPY (radian) [1.695, 0.017, 1.549]
+- Rotation: in RPY (degree) [97.136, 0.986, 88.735]
+- Matrix:
+  0.022  0.125  0.992  0.301
+  1.000  0.014 -0.024 -0.055
+ -0.017  0.992 -0.124  0.194
+  0.000  0.000  0.000  1.000
+
+3. gripping 하기
+
+4. second box position
+hh@hh:~$ ros2 run tf2_ros tf2_echo link0 tcp
+[INFO] [1780993517.667648072] [tf2_echo]: Waiting for transform link0 ->  tcp: Invalid frame ID "link0" passed to canTransform argument target_frame - frame does not exist
+At time 185.233342994
+- Translation: [0.304, 0.400, 0.561]
+- Rotation: in Quaternion (xyzw) [0.531, 0.529, 0.457, 0.479]
+- Rotation: in RPY (radian) [1.695, 0.022, 1.548]
+- Rotation: in RPY (degree) [97.106, 1.241, 88.719]
+- Matrix:
+  0.022  0.124  0.992  0.304
+  1.000  0.019 -0.025  0.400
+ -0.022  0.992 -0.124  0.561
+  0.000  0.000  0.000  1.000
+
+5. end position
+hh@hh:~$ ros2 run tf2_ros tf2_echo link0 tcp
+[INFO] [1780993582.946076994] [tf2_echo]: Waiting for transform link0 ->  tcp: Invalid frame ID "link0" passed to canTransform argument target_frame - frame does not exist
+At time 211.800011046
+- Translation: [0.261, 0.414, 0.235]
+- Rotation: in Quaternion (xyzw) [-0.001, 0.708, 0.701, -0.089]
+- Rotation: in RPY (radian) [1.573, -0.125, -3.014]
+- Rotation: in RPY (degree) [90.105, -7.140, -172.717]
+- Matrix:
+ -0.984  0.123 -0.127  0.261
+ -0.126  0.018  0.992  0.414
+  0.124  0.992 -0.002  0.235
+  0.000  0.000  0.000  1.000
+
+6. finish

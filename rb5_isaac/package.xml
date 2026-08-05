@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>rb5_isaac</name>
+  <version>0.1.0</version>
+  <description>RB5-850E Isaac Sim + MoveIt2 motion planning development environment</description>
+  <maintainer email="gudgh1630@gmail.com">hh</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>ament_index_python</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>rclpy</depend>
+  <depend>rbpodo_moveit_config</depend>
+  <depend>rbpodo_description</depend>
+  <depend>control_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>trajectory_msgs</depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

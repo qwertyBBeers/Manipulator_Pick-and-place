@@ -1,0 +1,15 @@
+action_dim: 4
+
+translation_scale:
+  dx: 0.03
+  dy: 0.03
+  dz: 0.03
+
+workspace:
+  min: [0.25, -0.45, 0.05]
+  max: [0.85,  0.45, 0.70]
+
+gripper:
+  open_value: 0.085
+  close_value: 0.0
+  threshold: 0.5

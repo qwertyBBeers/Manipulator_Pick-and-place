@@ -1,0 +1,8 @@
+assets/usd/*
+!assets/usd/.gitkeep
+__pycache__/
+*.pyc
+*.egg-info/
+rb5_isaaclab.egg-info/
+logs/
+outputs/

@@ -1,0 +1,16 @@
+octomap_frame: world
+octomap_resolution: 0.025
+max_range: 1.2
+
+sensors:
+  - depth_pointcloud
+
+depth_pointcloud:
+  sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
+  point_cloud_topic: /camera/depth/points
+  max_range: 1.2
+  point_subsample: 2
+  padding_offset: 0.02
+  padding_scale: 1.0
+  max_update_rate: 2.0
+  filtered_cloud_topic: /camera/depth/points_filtered

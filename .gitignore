@@ -1,0 +1,35 @@
+# colcon build artifacts (regenerate with `colcon build`)
+build/
+install/
+log/
+
+# AI coding-tool configs / session data -- not project source
+.claude/
+.codex/
+.agents/
+
+# Vendor stack: separately-cloned repo with its own git history + large
+# binary meshes (228M). Not included here -- see README.md's repo-structure
+# note. Re-clone it yourself if you need rbpodo_ros2.
+rbpodo_ros2/
+
+# lerobot_ws/lerobot is a separate huggingface/lerobot clone with its own
+# git history (see lerobot_ws/README.md) -- not nested into this repo.
+lerobot_ws/lerobot/
+
+# IsaacLab: generated/converted assets (regenerate via
+# rb5_isaaclab/scripts/convert_robot_to_usd.sh) and raw run logs. Trained
+# checkpoints are NOT gitignored -- only the best one is committed under
+# rb5_isaaclab/checkpoints/ (see that folder's README.md), the rest live
+# outside this repo in the IsaacLab log tree.
+rb5_isaaclab/assets/usd/
+rb5_isaaclab/training_logs/
+rb5_isaaclab/*.egg-info/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Editor/OS cruft
+.DS_Store

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rb5-isaaclab"
+version = "0.1.0"
+description = "IsaacLab RL (PPO/SAC via skrl) pick-and-place task for the RB5-850E + Robotiq 2F-85"
+requires-python = ">=3.10"
+dependencies = []
+# Isaac Lab / Isaac Sim / torch / skrl are provided by the `isaaclab` conda
+# environment -- not listed here to avoid pip trying (and failing) to
+# resolve them outside that environment.
+
+[tool.setuptools.packages.find]
+include = ["rb5_isaaclab*"]

@@ -1,0 +1,112 @@
+# For the ReachGrasp stage (reach_grasp_env_cfg.py). Gripper closing is
+# scripted there (mdp.AutoGraspActionTermCfg, 0 policy dims), not learned --
+# the policy only controls the 6-dim arm action. That removes the
+# grasp-timing exploration problem entirely (see that module's docstring),
+# so entropy_loss_scale goes back down near the original baseline (0.002,
+# not the 0.003/0.01 tried for the RL-controlled-gripper Grasp stage) --
+# there's no close-timing discovery left to protect exploration for, and the
+# higher values measurably hurt reach precision there without buying
+# anything back.
+#
+# 2026-08-03 retrain (run 2026-08-03_12-24-35): `grasp_pose_position_reward`
+# plateaued at ~0.55-0.57 (~14cm from target, well outside the 3cm
+# `is_near_pregrasp` needs) for the last ~20% of training, while
+# `Learning / Learning rate` had already collapsed from 0.0029 to ~0.00015
+# by step 15000 (10% of training) and kept decaying toward ~0 from there.
+# Root-caused to `KLAdaptiveLR`: as `Policy / Standard deviation` shrinks,
+# the same-size policy mean update produces a larger apparent KL divergence
+# (KL between narrow Gaussians is far more sensitive to mean shifts), which
+# the scheduler reads as "update too big" and shrinks the LR to compensate --
+# a self-reinforcing spiral, not something entropy_loss_scale tuning can fix.
+# Confirmed the reward *shape* wasn't the culprit first: `1-tanh(d/std)`'s
+# gradient at the ~14cm stall point was still ~80% of its max-gradient value
+# at d=0, i.e. plenty of signal was still telling the policy to get closer --
+# it just couldn't act on it anymore.
+#
+# Fix tested here: drop the scheduler entirely and hold `learning_rate` fixed
+# throughout training, as the cleanest ablation to confirm/rule out the
+# death-spiral hypothesis (a looser `kl_threshold` would only slow the same
+# spiral down, not eliminate it).
+seed: 42
+
+models:
+  separate: False
+  policy:
+    class: GaussianMixin
+    clip_actions: False
+    clip_log_std: True
+    min_log_std: -20.0
+    max_log_std: 2.0
+    initial_log_std: 0.0
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [256, 128, 64]
+        activations: elu
+    output: ACTIONS
+  value:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [256, 128, 64]
+        activations: elu
+    output: ONE
+
+memory:
+  class: RandomMemory
+  memory_size: -1  # auto (== agent.rollouts)
+
+agent:
+  class: PPO
+  rollouts: 24
+  learning_epochs: 8
+  # 16, not 4 -- num_envs is 8192 here (4x the 2048 the base skrl_ppo_cfg.yaml
+  # was tuned at), so mini_batches scales 4x too to hold the per-gradient-step
+  # batch size fixed at num_envs*rollouts/mini_batches = 12288, same as the
+  # already-validated 2048-env runs.
+  mini_batches: 16
+  discount_factor: 0.99
+  lambda: 0.95
+  # Fixed, no scheduler -- see module-level comment above. 1.0e-04 is the
+  # same base rate the KLAdaptiveLR run started from, just no longer decayed.
+  learning_rate: 1.0e-04
+  learning_rate_scheduler: null
+  learning_rate_scheduler_kwargs: null
+  state_preprocessor: RunningStandardScaler
+  state_preprocessor_kwargs: null
+  value_preprocessor: RunningStandardScaler
+  value_preprocessor_kwargs: null
+  random_timesteps: 0
+  learning_starts: 0
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  clip_predicted_values: True
+  entropy_loss_scale: 0.002
+  value_loss_scale: 2.0
+  # 0.0 (disabled) -- reverted back to the known-good baseline
+  # (2026-08-03_20-33-44) for the 2026-08-04 one-at-a-time ablation (see
+  # reach_grasp_env_cfg.py's module docstring). 0.01 was tried as a
+  # safety net after a later run diverged, but that same run also showed
+  # `Loss / Value loss` pinned near 0 and reward stalling for the rest of
+  # training -- 0.01 turned out to be too strict for this setup's normal
+  # per-epoch KL and throttled real learning, not just runaway updates.
+  kl_threshold: 0.0
+  rewards_shaper_scale: 0.01
+  time_limit_bootstrap: False
+  experiment:
+    directory: "rb5_pick_place"
+    experiment_name: "PPO(ReachGrasp)"
+    write_interval: auto
+    checkpoint_interval: auto
+
+trainer:
+  class: SequentialTrainer
+  # Same 150000 used for the Grasp-stage retry -- reach precision is the
+  # only thing left to learn here, but it now needs to be precise enough to
+  # pass `is_near_pregrasp`'s tight threshold, not just "close enough" for a
+  # smooth dense reward to look good.
+  timesteps: 150000
+  environment_info: log

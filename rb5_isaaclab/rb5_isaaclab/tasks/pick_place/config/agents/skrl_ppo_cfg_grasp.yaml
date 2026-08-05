@@ -1,0 +1,99 @@
+# For the Grasp-only stage (grasp_env_cfg.py). Same as skrl_ppo_cfg_grasplift.yaml
+# except `agent.entropy_loss_scale` (below), `trainer.timesteps`, and
+# `experiment.experiment_name`.
+
+# History: entropy was first raised 0.001 -> 0.01 to slow the exploration
+# collapse that let GraspLift's `Policy / Standard deviation` hit ~0.06 by
+# 75% of training. That alone didn't work -- the 2026-07-30_21-07-10 retrain
+# (episode_length_s fixed to 8.0, entropy=0.01) still collapsed std to 0.07
+# AND made grasp_pose_position_reward converge worse (0.74) than the original
+# GraspLift run's 0.85 at the same episode length -- i.e. the higher entropy
+# traded away reach precision without buying back any real exploration.
+# Reverted here to 0.003 (still above the original 0.001, but not 10x) now
+# that `grasp_approach_closing_reward` (see rewards.py) gives the policy an
+# actual dense gradient toward attempting a close near the object, instead of
+# relying on blind entropy-driven exploration to stumble into bilateral
+# contact by chance.
+seed: 42
+
+models:
+  separate: False
+  policy:
+    class: GaussianMixin
+    clip_actions: False
+    clip_log_std: True
+    min_log_std: -20.0
+    max_log_std: 2.0
+    initial_log_std: 0.0
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [256, 128, 64]
+        activations: elu
+    output: ACTIONS
+  value:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [256, 128, 64]
+        activations: elu
+    output: ONE
+
+memory:
+  class: RandomMemory
+  memory_size: -1  # auto (== agent.rollouts)
+
+agent:
+  class: PPO
+  rollouts: 24
+  learning_epochs: 8
+  # 16, not 4 -- num_envs is 8192 here (4x the 2048 the base skrl_ppo_cfg.yaml
+  # was tuned at), so mini_batches scales 4x too to hold the per-gradient-step
+  # batch size fixed at num_envs*rollouts/mini_batches = 12288, same as the
+  # already-validated 2048-env runs. Scaling num_envs alone without this
+  # would have silently ballooned the batch size, changing the optimization
+  # itself, not just the data-collection parallelism.
+  mini_batches: 16
+  discount_factor: 0.99
+  lambda: 0.95
+  learning_rate: 1.0e-04
+  learning_rate_scheduler: KLAdaptiveLR
+  learning_rate_scheduler_kwargs:
+    kl_threshold: 0.01
+  state_preprocessor: RunningStandardScaler
+  state_preprocessor_kwargs: null
+  value_preprocessor: RunningStandardScaler
+  value_preprocessor_kwargs: null
+  random_timesteps: 0
+  learning_starts: 0
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  clip_predicted_values: True
+  # 0.003, not the 0.01 tried previously -- see module-level comment above.
+  entropy_loss_scale: 0.003
+  value_loss_scale: 2.0
+  kl_threshold: 0.0
+  rewards_shaper_scale: 0.01
+  time_limit_bootstrap: False
+  experiment:
+    directory: "rb5_pick_place"
+    experiment_name: "PPO(Grasp)"
+    write_interval: auto
+    checkpoint_interval: auto
+
+trainer:
+  class: SequentialTrainer
+  # 150000, up from 100000 -- the 2026-07-30_21-07-10 run hadn't fully
+  # converged reach yet (grasp_pose_position_reward still fluctuating around
+  # 0.74-0.76, not flat), and the new grasp_approach_closing_reward /
+  # bilateral_fingertip_contact_reward/stable_grasp_reward funnel is an
+  # additional skill on top of reach that needs its own time to be
+  # discovered and reinforced once reach is solid -- more timesteps alone
+  # wasn't the fix for the earlier failures (reward shape was), but it's a
+  # necessary complement now that the shape actually has gradient toward
+  # grasping.
+  timesteps: 150000
+  environment_info: log

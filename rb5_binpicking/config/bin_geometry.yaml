@@ -1,0 +1,51 @@
+# Single source of truth for source/destination bin geometry.
+#
+# Consumed by (all three MUST read this file, not private constants):
+#   - rb5_binpicking/rb5_binpicking/bin_geometry.py  (MoveIt collision objects,
+#     used by moveit_pick_place.py and scene_setup.py)
+#   - rb5_binpicking/scripts/binpicking_scene.py       (Isaac Sim FixedCuboid walls)
+#
+# `center` is [x, y, floor_z] in `frame_id`: x/y are the bin footprint center,
+# floor_z is the height of the bin's inner floor surface (0.0 = ground level).
+# This is NOT the volumetric center of the bin.
+#
+# `inner_size` is [width(x), depth(y), height(z)] of the usable interior
+# (the empty space objects occupy), not the outer footprint including walls.
+#
+# frame_id is `link0`, which is coincident with `world` in this workspace
+# (binpicking.launch.py publishes an identity static transform world -> link0).
+# If that static transform ever becomes non-identity, this file's frame_id
+# assumption must be revisited together with binpicking_scene.py.
+
+source_bin:
+  # x was 0.45 -- with inner_size x=0.42, the near wall sat at x=0.24, and
+  # objects settling near that wall required the elbow (link2) to fold in
+  # tight to the robot base to reach down to the (correct, post-README2.md
+  # §7.20) grasp height, colliding with that wall (README2.md §7.22). Moved
+  # the whole bin 0.06m farther out so even near-wall rests have more room
+  # for a less-folded arm posture.
+  #
+  # inner_size height was 0.22 -- a direct IK/collision probe (README2.md
+  # §7.24) showed that with a 22cm wall against a 4.2cm object, EVERY
+  # reachable grasp configuration for this bin required some arm link
+  # (elbow/forearm/wrist, and in one solution branch the gripper fingertips
+  # by up to 9.4cm) to intersect the wall or floor -- not a marginal-position
+  # problem, a structural one: the wall was disproportionately tall relative
+  # to both the object and the top-down approach geometry. Per-position
+  # tuning (§7.17/§7.21/§7.22/§7.23) kept hitting the same wall regardless.
+  # Dropped to near-zero (0.01) -- effectively an open table with a small
+  # lip, still enough to keep objects from sliding off during settling, but
+  # no longer tall enough to obstruct any part of the arm's descent.
+  frame_id: link0
+  center: [0.51, 0.00, 0.00]
+  inner_size: [0.42, 0.36, 0.01]
+  wall_thickness: 0.007
+
+destination_bin:
+  # Same reasoning as source_bin above (README2.md §7.24) -- dropped from
+  # 0.17 to near-zero so placing into this bin doesn't hit the same
+  # structural wall-height problem.
+  frame_id: link0
+  center: [0.28, 0.44, 0.00]
+  inner_size: [0.28, 0.23, 0.01]
+  wall_thickness: 0.007

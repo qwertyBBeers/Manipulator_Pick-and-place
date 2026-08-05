@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>rb5_binpicking</name>
+  <version>0.1.0</version>
+  <description>RB5-850E bin picking — Isaac Sim scene (Phase 1) + Isaac Lab skeleton (Phase 2)</description>
+  <maintainer email="gudgh1630@gmail.com">hh</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>ament_index_python</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>rclpy</depend>
+  <depend>rb5_isaac</depend>
+  <depend>rbpodo_moveit_config</depend>
+  <depend>moveit_ros_move_group</depend>
+  <depend>moveit_configs_utils</depend>
+  <depend>robot_state_publisher</depend>
+  <depend>rviz2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>rqt_image_view</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>moveit_msgs</depend>
+  <depend>moveit_ros_occupancy_map_monitor</depend>
+  <depend>shape_msgs</depend>
+  <depend>control_msgs</depend>
+  <depend>python3-numpy</depend>
+  <depend>python3-yaml</depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
