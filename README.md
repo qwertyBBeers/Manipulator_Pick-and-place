@@ -17,10 +17,13 @@ cannot quietly break the others.
 Everything runs in NVIDIA Isaac Sim. Track 1 additionally supports the real
 robot through the vendor stack.
 
-![Two RB5-850E arms relaying a block in Isaac Sim](images/processing.png)
-
-*Two arms mid-relay: robot B is lowering onto the handoff tray (blue) after
-robot A placed the block there. Source bin left, destination bin right.*
+<p align="center">
+  <img src="images/processing.png" width="75%" alt="Two RB5-850E arms relaying a block in Isaac Sim">
+  <br>
+  <em><b>Fig 1.</b> The relay mid-execution in Isaac Sim. Robot B descends onto the
+  handoff tray (blue) for the block robot A left there; the source bin is at left,
+  the destination bin at right.</em>
+</p>
 
 ---
 
