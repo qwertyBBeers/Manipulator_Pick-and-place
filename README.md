@@ -12,10 +12,15 @@ cannot quietly break the others.
 |---|---|---|
 | 1. Planning | ROS 2 + MoveIt 2 state machine | **Working.** Used as the expert demonstrator for track 3. |
 | 2. Reinforcement learning | IsaacLab + skrl PPO, staged curriculum | **Trained.** Checkpoints for all stages; end-to-end success rate not yet re-measured after the stage redesign. |
-| 3. VLA | LeRobot + SmolVLA | **In progress.** 504 demonstration episodes collected; fine-tuning next. |
+| 3. VLA | LeRobot + SmolVLA | **In progress.** 504 demonstration episodes collected and converted; fine-tuning next. |
 
 Everything runs in NVIDIA Isaac Sim. Track 1 additionally supports the real
 robot through the vendor stack.
+
+![Two RB5-850E arms relaying a block in Isaac Sim](images/processing.png)
+
+*Two arms mid-relay: robot B is lowering onto the handoff tray (blue) after
+robot A placed the block there. Source bin left, destination bin right.*
 
 ---
 
@@ -119,6 +124,17 @@ Each arm's leg of the relay is one episode, labelled with its own instruction
 three cameras — one front overview plus a wrist camera on each arm — with the
 block's position, yaw and colour randomized every cycle.
 
+The relay itself is deterministic — MoveIt planning, not a learned policy. That
+is the point: it is the expert whose demonstrations the VLA is trained on.
+
+![The deterministic pipeline that generates the demonstrations](images/total_framework.png)
+
+Every stage in that diagram exists because something failed without it. The
+fixed IK seed pins which joint solution a reach resolves to; the test lift
+catches a grasp that closed on nothing before the arm carries air across the
+table; the retry loop re-observes the block rather than assuming it is still
+where it was.
+
 ```bash
 # one collection instance: scene + MoveIt + logger + batches of relay runs
 cd lerobot_ws/dual_robot
@@ -134,10 +150,11 @@ python lerobot_ws/tools/convert_relay_episodes_to_lerobot.py \
     --source-root <data root> --repo-id <user>/rb5_relay --root <output>
 ```
 
-Collected so far: **504 successful episodes** (~650 frames each, three
-instructions), plus labelled failures kept in a separate tree — a failed attempt
-is not a demonstration of the task, but it is useful data about what dropping
-the block looks like.
+Collected: **504 successful episodes, 328,412 frames**, across three
+instructions, converted to a LeRobotDataset (v3.0, 6 fps, two camera streams).
+Labelled failures are kept in a separate tree — a failed attempt is not a
+demonstration of the task, but it is useful data about what dropping the block
+looks like, and mixing the two would teach a policy to drop things.
 
 What made the relay reliable enough to harvest, measured rather than guessed:
 
