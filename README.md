@@ -1,86 +1,86 @@
-# Manipulator — RB5-850E Pick-and-Place
+# RB5-850E Pick-and-Place
 
-Rainbow Robotics RB5-850E + Robotiq 2F-85 그리퍼로 pick-and-place를
-구현하는 저장소. 서로 독립적인 세 갈래로 진행 중:
+Pick-and-place on a Rainbow Robotics **RB5-850E** with a **Robotiq 2F-85** gripper,
+built three ways on the same robot and the same task: a classical planning
+pipeline, a reinforcement-learning policy, and a vision-language-action policy.
 
-1. **휴리스틱 파이프라인** (`rb5_binpicking`/`rb5_isaac`, ROS2/MoveIt2) — 완료, 동작함.
-2. **IsaacLab 강화학습** (`rb5_isaaclab`, 순수 Python/PyTorch) — 현재 가장 활발히 개발 중.
-3. **VLA 계열 실험** (GR00T 로드맵 / `lerobot_ws` SmolVLA) — 탐색 단계.
+The three tracks are deliberately independent — none of them imports another's
+code — so they can be compared on equal footing, and so that a change to one
+cannot quietly break the others.
 
-각 갈래는 서로의 코드를 건드리지 않는다. 자세한 설계 이력/버그
-진단은 `README2.md`(작업 로그, § 단위로 누적) 참고.
+| Track | Method | Status |
+|---|---|---|
+| 1. Planning | ROS 2 + MoveIt 2 state machine | **Working.** Used as the expert demonstrator for track 3. |
+| 2. Reinforcement learning | IsaacLab + skrl PPO, staged curriculum | **Trained.** Checkpoints for all stages; end-to-end success rate not yet re-measured after the stage redesign. |
+| 3. VLA | LeRobot + SmolVLA | **In progress.** 504 demonstration episodes collected; fine-tuning next. |
 
-## 저장소 구조
-
-```
-rbpodo_ros2/     Rainbow Robotics 벤더 스택 (description/hardware/bringup/moveit_config)
-                 실물 로봇 bringup 담당. 시스템 ROS 2 Humble(/opt/ros/humble)로 빌드됨.
-rb5_isaac/       Isaac Sim 연동 + trajectory_bridge.py (MoveIt 궤적 → Isaac Sim 조인트 커맨드)
-rb5_binpicking/  RB5-850E bin-picking 데모 (Isaac Sim + MoveIt2 휴리스틱 상태머신). Phase 1 실구현체.
-rb5_isaaclab/    IsaacLab 기반 PPO 강화학습 (ROS 아님, isaaclab conda env + pip install -e).
-                 상세 실행법: rb5_isaaclab/README.md
-                 구현 이력: rb5_isaaclab/CURRICULUM_REPORT.md, PICK_PLACE_COMPLETION_REPORT.md
-lerobot_ws/      LeRobot + SmolVLA 실험용 별도 워크스페이스 (자체 git, python 3.12 필요).
-                 상세: lerobot_ws/README.md
-deprecated/      더 이상 배선 안 된 죽은 코드 (삭제 대신 이동 — 사유는 deprecated/README.md)
-README2.md       작업 로그 (버그 진단/의사결정 이력, § 번호로 누적, 날짜별)
-```
-
-`build/`, `install/`, `log/`는 colcon 산출물(gitignore 대상).
+Everything runs in NVIDIA Isaac Sim. Track 1 additionally supports the real
+robot through the vendor stack.
 
 ---
 
-## Track 1 — 휴리스틱 Pick-and-Place (완료)
+## Repository layout
 
-Isaac Sim 안에서 스크립트 상태머신으로 pick → place 수행. 실물 로봇
-bringup도 `rbpodo_ros2`로 별도 지원.
+```
+rb5_binpicking/   Track 1. Isaac Sim scene + MoveIt pick-and-place state machine.
+rb5_isaac/        Track 1. MoveIt trajectory -> Isaac Sim joint-command bridge.
+rbpodo_ros2/      Vendor stack (description / hardware / bringup / moveit_config).
+                  Brings up the physical robot. Separate git repository.
+rb5_isaaclab/     Track 2. IsaacLab PPO curriculum. Not ROS; its own conda env.
+lerobot_ws/       Track 3. LeRobot + SmolVLA workspace, including the two-robot
+                  relay used to generate training data. Separate git repository
+                  for the vendored LeRobot checkout.
+deprecated/       Code no longer wired up, kept rather than deleted.
+README2.md        Engineering log: bug diagnoses and design decisions, dated.
+```
 
-**핵심 파일**
-- `rb5_binpicking/scripts/binpicking_scene.py` — Isaac Sim 씬(로봇/그리퍼/카메라/bin/오브젝트), `/binpicking/object_pose` 퍼블리시
-- `rb5_binpicking/scripts/moveit_pick_place.py` — watch→pre-grasp→grasp→lift→pre-place→place→retreat 상태머신 (MoveIt `/move_action`)
-- `rb5_isaac/rb5_isaac/trajectory_bridge.py` — MoveIt 궤적 → Isaac Sim 조인트 커맨드 변환 브릿지
+`build/`, `install/` and `log/` are colcon artifacts and are not tracked.
 
-**실행**
+---
+
+## Track 1 — Planning (MoveIt 2)
+
+A scripted state machine drives the arm through
+`watch → pre-grasp → grasp → lift → pre-place → place → retreat`, planning each
+motion with MoveIt 2 and executing it in Isaac Sim.
+
 ```bash
+# 1. simulator
 ~/isaacsim/python.sh rb5_binpicking/scripts/binpicking_scene.py
+
+# 2. MoveIt stack
 ros2 launch rb5_binpicking binpicking.launch.py
+
+# 3. controller
 ros2 run rb5_binpicking moveit_pick_place.py
 ```
 
-세부 버그 이력: `README2.md` §7 (Phase 1 신뢰성 대개편).
+Key files:
+
+- `rb5_binpicking/scripts/binpicking_scene.py` — scene (robot, gripper, camera, bins, object); publishes ground-truth object pose
+- `rb5_binpicking/scripts/moveit_pick_place.py` — the state machine
+- `rb5_isaac/rb5_isaac/trajectory_bridge.py` — MoveIt trajectories → Isaac joint commands
+
+See `README2.md` §7 for the reliability work behind this track.
 
 ---
 
-## Track 2 — IsaacLab 강화학습 (진행 중)
+## Track 2 — Reinforcement learning (IsaacLab + PPO)
 
-`rb5_isaaclab/`에 Track 1과 완전히 독립된 PPO 커리큘럼 학습 파이프라인.
-같은 로봇/그리퍼 USD를 쓰지만 물리 시뮬레이션도, 리워드도, 정책도 전부
-IsaacLab(skrl PPO) 기준으로 새로 설계.
+A staged curriculum, each stage trainable and playable on its own as
+`RB5-PickPlace-<Stage>-JointPos-v0`:
 
-**커리큘럼 스테이지** (각각 독립적으로 학습/재생 가능, `RB5-PickPlace-<Stage>-JointPos-v0`):
-
-| 스테이지 | 목표 | 그리퍼 제어 |
+| Stage | Goal | Gripper |
 |---|---|---|
-| Reach | pre-grasp 타겟까지 접근 | 없음 (팔만) |
-| ReachGrasp | 접근 + 실제 grasp | **스크립트** (근접 시 자동으로 닫힘) |
-| Transport | 이미 쥔 물체를 목적지 상공까지 운반 | 학습 (계속 쥐고 있기) |
-| Place | 이미 쥔 물체를 목적지에 내려놓기 | **스크립트** (안착 조건 만족 시 자동으로 열림) |
-| GraspLift / Curriculum | 초기 4-스테이지 설계의 잔존 버전 (grasp/전체를 RL이 직접 결정) | 학습 |
+| Reach | approach the pre-grasp pose | not controlled |
+| ReachGrasp | approach and grasp | scripted (closes on proximity) |
+| Transport | carry a held object to above the destination | learned (keep holding) |
+| Place | set a held object down | scripted (opens once settled) |
+| GraspLift / Curriculum | earlier design where the policy also decides when to grasp and release | learned |
 
-ReachGrasp/Place는 "언제 쥘지/놓을지"를 정책이 직접 탐색하게 하는 대신
-env 상태 기반으로 스크립트 처리 — grasp/release 타이밍 탐색 문제를
-구조적으로 제거한 최신 설계(GraspLift/Curriculum의 학습된 그리퍼 제어가
-반복적으로 겪은 문제의 해결책). 자세한 경위는 `README2.md` §9 참고.
-
-**현재 최고 성능 (2026-08-05 기준, ReachGrasp)**: total reward 43.98
-(peak 50.08), bilateral contact / stable grasp 안정적으로 발생,
-orientation 붕괴 없음. `robots/rb5_850e.py`의 `ARM_DAMPING=1000` +
-PD gain 랜덤화(`randomize_actuator_gains`, startup-only)가 검증된 최종
-설정 — damping을 올리는 변경은 단독으로는 괜찮았지만 PD 랜덤화와
-합치면 오히려 더 나빠짐(§9.4)이 확인된 것도 기록해 둠.
-
-**실행법**: `rb5_isaaclab/README.md` 참고 (USD 변환 → smoke test → 학습
-→ TensorBoard → 재생, 전부 명령어 포함).
+The scripted gripper in ReachGrasp and Place is a deliberate design choice: it
+removes the *when to close / when to open* search problem that the earlier
+fully-learned versions kept getting stuck on. `README2.md` §9 has the history.
 
 ```bash
 conda activate isaaclab && unset PYTHONPATH
@@ -90,69 +90,93 @@ cd <IsaacLab repo>
   --agent skrl_ppo_cfg_entry_point
 ```
 
----
+Best training reward to date (ReachGrasp, 2026-08-05): total reward 43.98, peak
+50.08, with bilateral contact and stable grasp occurring reliably.
 
-## Track 3 — VLA 계열 실험 (탐색 단계, 미착수/초기)
+**On success rates:** reward curves are not success. `scripts/evaluate_policy.py`
+derives task milestones (contact, stable grasp, lift, transport, release) from
+the same physical-state predicates the environment uses, and an earlier run of
+it found a grasp-to-lift failure that the reward curves never showed. That
+evaluator has not been re-run since the stage redesign, so this repository does
+not currently claim an end-to-end success number for track 2.
 
-### 3a. GR00T 로드맵
-
-`moveit_pick_place.py`의 하드코딩 상태머신을 NVIDIA Isaac GR00T 정책으로
-교체하고, 이후 DUNE 기반 spatial encoder로 확장하는 3단계 계획. **아직
-착수 전** — Track 2(IsaacLab RL)를 먼저 진행 중이라 우선순위가 밀려있음.
-계획 상세는 이 파일 하단의 "GR00T/DUNE 로드맵" 절 참고.
-
-### 3b. LeRobot + SmolVLA
-
-`lerobot_ws/`에 완전히 분리된 워크스페이스로 SmolVLA(450M) fine-tuning
-탐색 중. `lerobot` 요구 Python 3.12+라 기존 conda 환경(전부 3.10~3.11)과
-호환 안 됨 — 별도 env 필요. 현재는 RB5용 커스텀 LeRobot `Robot` 플러그인
-설계 분석 단계. 상세: `lerobot_ws/README.md`.
+Details: `rb5_isaaclab/README.md`, `CURRICULUM_REPORT.md`,
+`PICK_PLACE_COMPLETION_REPORT.md`.
 
 ---
 
-## GR00T/DUNE 로드맵 (Track 3a 상세)
+## Track 3 — Vision-language-action (LeRobot + SmolVLA)
 
-### Phase 2 — VLA(GR00T)로 대체
+A VLA policy needs demonstrations with images and language. To produce them,
+`lerobot_ws/dual_robot/` runs **two** RB5-850E arms that relay a single block:
 
-**2.1 환경 구축**
-- `NVIDIA/Isaac-GR00T` 저장소 clone, 전용 conda 환경(`groot`, python 3.10) 생성
-- Fine-tuning 기본 설정 기준 VRAM ~25GB 필요
-- HuggingFace에서 GR00T N1.7 pretrained checkpoint 다운로드
+```
+  source bin  --robot A-->  handoff tray  --robot B-->  destination bin
+```
 
-**2.2 데모 데이터 수집** (Track 1을 "expert demonstrator"로 활용)
-- `moveit_pick_place.py` 실행 중 RGB(-D)/로봇 state/action을 동기화해 기록하는 로거 노드
-- LeRobot v2 스키마 + `meta/modality.json`으로 변환
-- `binpicking_scene.py`의 object/bin pose 랜덤화를 켜서 여러 episode 수집
+Each arm's leg of the relay is one episode, labelled with its own instruction
+("pick up the block and place it on the blue tray in the middle"), recorded from
+three cameras — one front overview plus a wrist camera on each arm — with the
+block's position, yaw and colour randomized every cycle.
 
-**2.3 Fine-tuning**
-- `scripts/gr00t_finetune.py --dataset-path <경로>`로 bin-picking 단일 태스크 fine-tune
-- 출력 action 포맷을 `action_adapter.py`/`rb5_action_space.yaml`(현재 `deprecated/`)에 맞춰 재검토
+```bash
+# one collection instance: scene + MoveIt + logger + batches of relay runs
+cd lerobot_ws/dual_robot
+TARGET_SUCCESS=500 ./collect_instance.sh 1 400 3
 
-**2.4 추론 노드 개발**
-- 신규 노드: 카메라+로봇 state 구독 → GR00T 추론 → EEF pose 변환 → MoveIt 실행
-- `moveit_pick_place.py`를 대체하되 bin collision object 등록 등 나머지 인프라는 재사용
+# several of these run side by side; each is isolated by its own ROS_DOMAIN_ID
+./collect_instance.sh 2 400 3
+./collect_instance.sh 3 400 3
 
-**2.5 평가**
-- Isaac Sim closed-loop 실행 → Track 1 baseline 대비 성공률/정밀도 비교
-- 학습 시 보지 못한 배치로 일반화 성능 확인
+# then convert to a LeRobotDataset
+conda activate lerobot
+python lerobot_ws/tools/convert_relay_episodes_to_lerobot.py \
+    --source-root <data root> --repo-id <user>/rb5_relay --root <output>
+```
 
-### Phase 3 — DUNE 기반 spatial input 추가
+Collected so far: **504 successful episodes** (~650 frames each, three
+instructions), plus labelled failures kept in a separate tree — a failed attempt
+is not a demonstration of the task, but it is useful data about what dropping
+the block looks like.
 
-NAVER LABS Europe의 **DUNE**(DINOv2 + Multi-HMR + MASt3R distillation
-기반 universal 2D/3D encoder)을 spatial feature 소스로 GR00T에 추가.
+What made the relay reliable enough to harvest, measured rather than guessed:
 
-- GR00T 기본 vision encoder 교체 vs 별도 spatial branch concat — GR00T 코드 확인 후 결정 (보류 상태)
-- `binpicking_scene.py`의 depth 퍼블리시를 데이터셋에 추가 채널로 저장
-- DUNE 인코더는 freeze/LoRA, GR00T 나머지는 Phase 2 체크포인트에서 이어서 fine-tune
-- Phase 2(GR00T-only) 대비 성공률/spatial 정확도 비교, 특히 가림(occlusion)/새 bin 배치 케이스 중심
+- **IK branch determinism.** A pose-only goal lets the planner pick any joint
+  solution for a reach. The same 18 cm descent then costs 0.43 rad of joint
+  travel from one branch and 3.2–5.3 rad from another, and the expensive ones
+  put a link on the floor. Seeding IK from a fixed configuration pins the branch.
+- **Reach governs grasp reliability, not gripper tuning.** 62 % success at
+  0.40 m, 24 % beyond 0.55 m — with the tool arriving a deterministic 1–3 mm
+  from target in both cases. The handoff tray was moved to the point equidistant
+  (0.51 m) from both robot bases.
+- **The planning scene had no ground plane**, so plans swept links through a
+  floor the simulator does have.
+- **Gripper ramps were timed on the wall clock** while the drive response they
+  were tuned against is in simulated seconds. Adding cameras lowered the
+  real-time factor and silently shortened every close. They run on the ROS clock
+  now.
+- **Speed is spent where the hand is empty** and given back while carrying,
+  which is what stopped the block leaving a confirmed grasp mid-lift.
 
-### 참고 자료
-- [GR00T N1.5 Explained](https://learnopencv.com/gr00t-n1_5-explained/)
-- [NVIDIA/Isaac-GR00T (GitHub)](https://github.com/Nvidia/Isaac-GR00T)
-- [Post-Training Isaac GR00T N1.5 for LeRobot SO-101 Arm](https://huggingface.co/blog/nvidia/gr00t-n1-5-so101-tuning)
-- [NVIDIA Isaac Teleop and GR00T 1.7 in LeRobot](https://huggingface.co/blog/nvidia/nvidia-isaac-teleop-and-gr00t17-in-lerobot)
-- [DUNE: Distilling a Universal Encoder from heterogeneous 2D and 3D teachers — NAVER LABS Europe](https://europe.naverlabs.com/research/publications/dune/)
-- [A Universal Encoder for Embodied Perception — NAVER LABS Europe](https://europe.naverlabs.com/research/a-universal-encoder-for-computer-vision/)
+`lerobot_ws/README.md` carries the full measurements, including the failure
+modes that turned out not to be causes.
 
-> API/스크립트 경로/데이터 포맷 등 GR00T/DUNE 세부 사항은 빠르게 바뀌는
-> 영역이라, 실제 착수 시점에 최신 문서로 재확인 필요.
+---
+
+## Roadmap
+
+- Fine-tune SmolVLA on the collected dataset and evaluate it closed-loop in the
+  simulator against the track-1 baseline.
+- Re-run `evaluate_policy.py` on the current RL checkpoints so track 2 has a real
+  success number.
+- Raise relay grasp reliability before collecting a second, larger dataset —
+  at the current ~29 % episode success rate, fixing the grasp is worth more than
+  running longer.
+- GR00T: replace the track-1 state machine with a GR00T N1.7 policy, then extend
+  it with a DUNE spatial encoder. Planned, not started; see `README2.md`.
+
+## References
+
+- [NVIDIA Isaac GR00T](https://github.com/Nvidia/Isaac-GR00T) · [GR00T N1.5 explained](https://learnopencv.com/gr00t-n1_5-explained/)
+- [Post-training GR00T N1.5 for the LeRobot SO-101 arm](https://huggingface.co/blog/nvidia/gr00t-n1-5-so101-tuning)
+- [DUNE: a universal encoder from 2D and 3D teachers](https://europe.naverlabs.com/research/publications/dune/)
