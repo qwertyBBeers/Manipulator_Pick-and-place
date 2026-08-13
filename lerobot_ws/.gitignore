@@ -1,0 +1,3 @@
+# Dataset episodes live on the HDD (/mnt/hdd/relay_datasets); this is a symlink.
+# Recorded images are large and are not repository content.
+datasets

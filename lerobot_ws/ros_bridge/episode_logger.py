@@ -24,17 +24,21 @@ Usage:
     conda activate physical   # or isaaclab
     python3 episode_logger.py --out-dir ./episodes --task "pick up the cube and place it in the bin"
 
-Episode boundaries are marked interactively: press Enter to start recording,
-press Enter again to stop and save. Repeat for each episode; Ctrl+C to exit.
+Episode boundaries are marked interactively by default: press Enter to start
+recording, press Enter again to stop and save. Repeat for each episode;
+Ctrl+C to exit. Pass --duration/--count for non-interactive fixed-length
+back-to-back episodes instead (e.g. for scripting alongside moveit_pick_place.py's
+autonomous state machine, which has no external start/stop hook to trigger on).
 
-Status: scaffold, not yet run against a live robot/sim. Output layout is
-consumed by ../tools/convert_isaac_episodes_to_lerobot.py's `iter_episodes`.
+Output layout is consumed by ../tools/convert_isaac_episodes_to_lerobot.py's
+`iter_episodes`.
 """
 
 from __future__ import annotations
 
 import argparse
 import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -80,13 +84,15 @@ class EpisodeLogger(Node):
         self.create_subscription(Image, "/camera/color/image_raw", self._on_image, 1)
 
     def _on_joint_states(self, msg: JointState) -> None:
+        # Frames are paced by _on_image (camera fps), not this callback -- /joint_states
+        # arrives much faster (sim physics rate) and would otherwise flood the episode
+        # buffer with near-duplicate frames sharing one stale image.
         with self._lock:
             for name, pos in zip(msg.name, msg.position, strict=False):
                 if name in self._joint_pos:
                     self._joint_pos[name] = pos
                 elif name == GRIPPER_JOINTS[0]:
                     self._gripper_obs_pos = _knuckle_to_gripper_pos(pos)
-            self._maybe_log_frame()
 
     def _on_arm_command(self, msg: JointState) -> None:
         with self._lock:
