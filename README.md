@@ -12,7 +12,7 @@ cannot quietly break the others.
 |---|---|---|
 | 1. Planning | ROS 2 + MoveIt 2 state machine | **Working.** Used as the expert demonstrator for track 3. |
 | 2. Reinforcement learning | IsaacLab + skrl PPO, staged curriculum | **Trained.** Checkpoints for all stages; end-to-end success rate not yet re-measured after the stage redesign. |
-| 3. VLA | LeRobot + SmolVLA | **In progress.** 504 demonstration episodes collected and converted; fine-tuning next. |
+| 3. VLA | LeRobot + SmolVLA | **Fine-tuned.** 504 demonstrations; closed-loop in the simulator it succeeds on 8 of 26 attempts, against ~29 % for the planner that taught it. |
 
 Everything runs in NVIDIA Isaac Sim. Track 1 additionally supports the real
 robot through the vendor stack.
@@ -35,9 +35,10 @@ rb5_isaac/        Track 1. MoveIt trajectory -> Isaac Sim joint-command bridge.
 rbpodo_ros2/      Vendor stack (description / hardware / bringup / moveit_config).
                   Brings up the physical robot. Separate git repository.
 rb5_isaaclab/     Track 2. IsaacLab PPO curriculum. Not ROS; its own conda env.
-lerobot_ws/       Track 3. LeRobot + SmolVLA workspace, including the two-robot
-                  relay used to generate training data. Separate git repository
-                  for the vendored LeRobot checkout.
+lerobot_ws/       Track 3. LeRobot + SmolVLA workspace: the two-robot relay that
+                  generates training data (dual_robot/), the dataset converter
+                  (tools/) and the closed-loop policy runner (vla_eval/).
+                  Separate git repository for the vendored LeRobot checkout.
 deprecated/       Code no longer wired up, kept rather than deleted.
 README2.md        Engineering log: bug diagnoses and design decisions, dated.
 ```
@@ -181,12 +182,62 @@ What made the relay reliable enough to harvest, measured rather than guessed:
 `lerobot_ws/README.md` carries the full measurements, including the failure
 modes that turned out not to be causes.
 
+### Fine-tuning
+
+SmolVLA (450 M parameters, 100 M of them trainable) for 20 000 steps at batch
+64, ~2 h on one RTX 4090. Held-out validation loss fell from 0.072 to 0.017.
+
+```bash
+conda activate lerobot
+lerobot-train --policy.path=lerobot/smolvla_base \
+  --dataset.repo_id=local/rb5_relay --dataset.root=<dataset> \
+  --rename_map='{"observation.images.scene": "observation.images.camera1",
+                 "observation.images.wrist":  "observation.images.camera2"}' \
+  --batch_size=64 --steps=20000 --dataset.eval_split=0.05 --eval_steps=1000
+```
+
+The rename is not cosmetic: `smolvla_base` was pretrained with cameras named
+`camera1..3`, and its feature check passes only because the two supplied
+cameras are a subset of the three it knows.
+
+### Closed-loop evaluation
+
+`lerobot_ws/vla_eval/` runs the fine-tuned policy against the live simulator
+with **MoveIt out of the loop entirely** — no planning, no collision checking.
+The relay recorded `action` as the joint command the trajectory bridge was
+streaming to Isaac, so the policy's output goes onto exactly those topics.
+
+```bash
+conda activate lerobot                       # policy half, needs Python 3.12
+python lerobot_ws/vla_eval/smolvla_policy_server.py --checkpoint <ckpt>
+
+source /opt/ros/humble/setup.bash            # robot half, needs Python 3.10
+/usr/bin/python3 lerobot_ws/vla_eval/smolvla_rollout.py --task a_to_handoff --episodes 20
+```
+
+The two halves are separate processes because they must be: LeRobot requires
+Python 3.12 and rclpy for Humble is built against 3.10, so they cannot share an
+interpreter. They talk over a loopback socket.
+
+**Result: 8 successes in 26 attempts (31 %)**, block delivered to within 6–8 mm
+of the tray centre, in 441–524 control steps against a demonstrated median of
+662. That is level with the ~29 % the planner achieves per attempt — the policy
+reproduces its teacher, including its weakness: every failure is a failed
+grasp, never a failed carry or place. 26 attempts is a small sample (95 % CI
+roughly 14–52 %), so read it as "comparable to the expert", not as a ranking.
+
+Two properties worth more than the success rate: the per-step joint-travel cap
+never fired once in 26 episodes, and commands left the demonstrated joint
+envelope in under 1 % of steps. The policy stays inside the distribution it was
+trained on rather than being held there by the safety clamps.
+
 ---
 
 ## Roadmap
 
-- Fine-tune SmolVLA on the collected dataset and evaluate it closed-loop in the
-  simulator against the track-1 baseline.
+- Raise the VLA above its teacher rather than level with it. It inherited the
+  planner's grasp failures because it was trained on the planner's successes;
+  fixing the grasp in track 1 and recollecting is the shortest path.
 - Re-run `evaluate_policy.py` on the current RL checkpoints so track 2 has a real
   success number.
 - Raise relay grasp reliability before collecting a second, larger dataset —
