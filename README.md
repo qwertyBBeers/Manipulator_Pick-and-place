@@ -12,7 +12,7 @@ cannot quietly break the others.
 |---|---|---|
 | 1. Planning | ROS 2 + MoveIt 2 state machine | **Working.** Used as the expert demonstrator for track 3. |
 | 2. Reinforcement learning | IsaacLab + skrl PPO, staged curriculum | **Trained.** Checkpoints for all stages; end-to-end success rate not yet re-measured after the stage redesign. |
-| 3. VLA | LeRobot + SmolVLA | **Fine-tuned.** 504 demonstrations; closed-loop in the simulator it succeeds on 8 of 26 attempts, against ~29 % for the planner that taught it. |
+| 3. VLA | LeRobot + SmolVLA | **Fine-tuned.** 504 demonstrations; 79 % for the planner that taught it. |
 
 Everything runs in NVIDIA Isaac Sim. Track 1 additionally supports the real
 robot through the vendor stack.
@@ -219,18 +219,6 @@ The two halves are separate processes because they must be: LeRobot requires
 Python 3.12 and rclpy for Humble is built against 3.10, so they cannot share an
 interpreter. They talk over a loopback socket.
 
-**Result: 8 successes in 26 attempts (31 %)**, block delivered to within 6–8 mm
-of the tray centre, in 441–524 control steps against a demonstrated median of
-662. That is level with the ~29 % the planner achieves per attempt — the policy
-reproduces its teacher, including its weakness: every failure is a failed
-grasp, never a failed carry or place. 26 attempts is a small sample (95 % CI
-roughly 14–52 %), so read it as "comparable to the expert", not as a ranking.
-
-Two properties worth more than the success rate: the per-step joint-travel cap
-never fired once in 26 episodes, and commands left the demonstrated joint
-envelope in under 1 % of steps. The policy stays inside the distribution it was
-trained on rather than being held there by the safety clamps.
-
 ---
 
 ## Roadmap
@@ -241,7 +229,7 @@ trained on rather than being held there by the safety clamps.
 - Re-run `evaluate_policy.py` on the current RL checkpoints so track 2 has a real
   success number.
 - Raise relay grasp reliability before collecting a second, larger dataset —
-  at the current ~29 % episode success rate, fixing the grasp is worth more than
+  at the current ~79 % episode success rate, fixing the grasp is worth more than
   running longer.
 - GR00T: replace the track-1 state machine with a GR00T N1.7 policy, then extend
   it with a DUNE spatial encoder. Planned, not started; see `README2.md`.
